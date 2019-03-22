@@ -7,6 +7,7 @@ Created on Wed Aug 13 09:06:58 2014
 
 import struct
 import numpy as np
+import HEKAimport_cf as cf
 
 class PULTrace(object):
     
@@ -158,18 +159,27 @@ class PULGroups(object):
 class PULfile(object):
     
     def __init__(self, raw_data, data_pos):
+        
+        # These are the definitions for the binary format of the individual tree levels
+        self.root_struct = "ii32s80s400sdiihhi32h32s"
+        self.group_struct = "i32s80siiidd"
+        self.series_struct = "i32s80siiiic?ccdd40s40s40s40s32c4d96c400s80s40s40s40s40sii4d40s40s40s40s96c"
+        self.sweep_struct = "i32siiidd4ddiihhhh4dii16d"
+        self.trace_struct = "i32siiiiiiih?cccccddd8sdd8sdddddddddddi?chddiidddiidiiii10dddddii"
+        
         self.Groups = []
 
         self.__datapos = data_pos
 
         self.__datapos = self.read_tree(raw_data, self.__datapos) # Extract the header definitions
         
-        self.__datapos, root_data, root_children = self.read_root(raw_data, self.__datapos) # Read the highest tree level
+        #self.__datapos, root_data, root_children = self.read_root(raw_data, self.__datapos) # Read the highest tree level
+        self.__datapos, root_data, root_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[0], self.root_struct) # Read the highest tree level
 
         # Iterate through all available groups
         for group in np.arange(0, root_children):
             # Read group
-            self.__datapos, group_data, group_children = self.read_group(raw_data, self.__datapos)
+            self.__datapos, group_data, group_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[1], self.group_struct)
             # Add to list of groups
             self.Groups.append(PULGroups(group_data, group_children))
 
@@ -177,21 +187,21 @@ class PULfile(object):
             # Iterate through the series within the current group
             for series in np.arange(0, group_children):
                 # Read series
-                self.__datapos, series_data, series_children = self.read_series(raw_data, self.__datapos)
+                self.__datapos, series_data, series_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[2], self.series_struct)
                 # Add the current series to the list of series
                 self.Groups[-1].Series.append(PULSeries(series_data, series_children))
                 
                 # Iterate through all sweeps
                 for sweep in np.arange(0, series_children):
                     # Read current sweep
-                    self.__datapos, sweep_data, sweep_children = self.read_sweep(raw_data, self.__datapos)
+                    self.__datapos, sweep_data, sweep_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[3], self.sweep_struct)
                     # Add current sweep to list
                     self.Groups[-1].Series[-1].Sweeps.append(PULSweep(sweep_data, sweep_children))
                     
                     # Iterate through all traces 
                     for trace in np.arange(0, sweep_children):
                         # Read current trace
-                        self.__datapos, trace_data, trace_children = self.read_trace(raw_data, self.__datapos)
+                        self.__datapos, trace_data, trace_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[4], self.trace_struct)
                         # Add current trace to list of traces
                         self.Groups[-1].Series[-1].Sweeps[-1].Traces.append(PULTrace(trace_data, trace_children))
     
@@ -211,58 +221,3 @@ class PULfile(object):
         for i in np.arange(0, Levels):
             self.Level_Sizes.append(struct.unpack('i', data[start_pos+8+(i*4):start_pos+12+(i*4)])[0])
         return start_pos+12+(i*4) # Return the current position within the file
-    
-    def read_root(self, data, start_pos):
-        # Now read the root, check for size
-        if self.Level_Sizes[0] < 640:
-            print("Level Size Error Root")
-            print("Should be >= 640 but is "+str(self.Level_Sizes[0]))
-            quit()
-        #returns new position in file, data grouped according to the documentation and the number of children
-
-        return start_pos+self.Level_Sizes[0]+4, struct.unpack('ii32s80s400sdiihhi32h32s', data[start_pos:start_pos+640]), struct.unpack('i', data[start_pos+self.Level_Sizes[0]:start_pos+self.Level_Sizes[0]+4])[0]
-        
-        
-    def read_group(self, data, start_pos):
-        # Now continue to the group record, check for size
-        if self.Level_Sizes[1] < 144:
-            print("Level Size Error Group")
-            print("Should be >= 144 but is "+str(self.Level_Sizes[1]))
-            quit()
-           
-        #returns new position in file, data grouped according to the documentation and the number of children
-        return start_pos+self.Level_Sizes[1]+4, struct.unpack('i32s80siiidd', data[start_pos:start_pos+144]), struct.unpack('i', data[start_pos+self.Level_Sizes[1]:start_pos+self.Level_Sizes[1]+4])[0]
-        
-    
-    def read_series(self, data, start_pos):
-        # Now go on with the series record, check for size
-        if self.Level_Sizes[2] < 1408:
-            print("Level Size Error Series")
-            print("Should be >= 1408 but is "+str(self.Level_Sizes[2]))
-            quit()
-
-        #returns new position in file, data grouped according to the documentation and the number of children
-        return start_pos+self.Level_Sizes[2]+4, struct.unpack('i32s80siiiic?ccdd40s40s40s40s32c4d96c400s80s40s40s40s40sii4d40s40s40s40s96c', data[start_pos:start_pos+1408]), struct.unpack('i', data[start_pos+self.Level_Sizes[2]:start_pos+self.Level_Sizes[2]+4])[0]
-        
-        
-    def read_sweep(self, data, start_pos):
-        # Now go on with the series record, check for size
-        if self.Level_Sizes[3] < 288:
-            print( "Level Size Error Sweep")
-            print( "Should be >= 288 but is "+str(self.Level_Sizes[3]))
-            quit()
-            
-        #returns new position in file, data grouped according to the documentation and the number of children
-        return start_pos+self.Level_Sizes[3]+4, struct.unpack('i32siiidd4ddiihhhh4dii16d', data[start_pos:start_pos+288])  , struct.unpack('i', data[start_pos+self.Level_Sizes[3]:start_pos+self.Level_Sizes[3]+4])[0]
-            
-        
-    def read_trace(self, data, start_pos):
-        # Now go on with the series record, check for size
-        if self.Level_Sizes[4] < 424:
-            print( "Level Size Error Trace")
-            print( "Should be >= 424 but is "+str(self.Level_Sizes[4]))
-            quit()
-
-        #returns new position in file, data grouped according to the documentation (only for 424 used in an older PatchMaster version!) and the number of children
-        return start_pos+self.Level_Sizes[4]+4, struct.unpack('i32siiiiiiih?cccccddd8sdd8sdddddddddddi?chddiidddiidiiii10dddddii', data[start_pos:start_pos+424]), struct.unpack('i', data[start_pos+self.Level_Sizes[4]:start_pos+self.Level_Sizes[4]+4])[0]
-            

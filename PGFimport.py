@@ -7,6 +7,7 @@ Created on Wed Aug 13 09:06:58 2014
 
 import struct
 import numpy as np
+import HEKAimport_cf as cf
 
 class PGFStimulationRecord(object):
     
@@ -152,23 +153,30 @@ class PGFStimSegmentRecord(object):
 class PGFfile(object):
     
     def __init__(self, raw_data, data_pos):
+        
+        # These are the definitions for the binary format of the individual tree levels
+        self.root_struct = 'ii32sii10d320s32iii'
+        self.stimulation_struct = 'i32s32s32sidddddiiiiic????c?c????32s32s????i'
+        self.channel_struct = 'iii8shc?cc??hccii8sdddc???hhih?ciiddddddddiiiiiidccccccccddc?c13cddiid124siii'
+        self.stimseg_struct = '=ibbbbdidddiddiid'
+        
         self.StimulationRecords = []
 
         self.__datapos = data_pos
         
         self.__datapos = self.read_tree(raw_data, self.__datapos)
-        self.__datapos, root_data, root_children = self.read_root(raw_data, self.__datapos)
+        self.__datapos, root_data, root_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[0], self.root_struct)
         
         for stimrec in np.arange(0, root_children):
-            self.__datapos, stimrec_data, stimrec_children = self.read_stimulationrecord(raw_data, self.__datapos)
+            self.__datapos, stimrec_data, stimrec_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[1], self.stimulation_struct)
             self.StimulationRecords.append(PGFStimulationRecord(stimrec_data, stimrec_children))
             
             for channelrec in np.arange(0, stimrec_children):
-                self.__datapos, channelrec_data, channelrec_children = self.read_channelrecord(raw_data, self.__datapos)
+                self.__datapos, channelrec_data, channelrec_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[2], self.channel_struct)
                 self.StimulationRecords[-1].ChannelRecords.append(PGFChannelRecord(channelrec_data, channelrec_children))
                 
                 for stimsegrec in np.arange(0, channelrec_children):
-                    self.__datapos, stimsegrec_data, stimsegrec_children = self.read_stimsegmentrecord(raw_data, self.__datapos)
+                    self.__datapos, stimsegrec_data, stimsegrec_children = cf.read_level(raw_data, self.__datapos, self.Level_Sizes[3], self.stimseg_struct)
                     self.StimulationRecords[-1].ChannelRecords[-1].StimSegmentRecords.append(PGFStimSegmentRecord(stimsegrec_data, stimsegrec_children))
                     
         
@@ -186,49 +194,3 @@ class PGFfile(object):
         for i in np.arange(0, Levels):
             self.Level_Sizes.append(struct.unpack('i', data[start_pos+8+(i*4):start_pos+12+(i*4)])[0])
         return start_pos+12+(i*4)
-    
-    def read_root(self, data, start_pos):
-        # Now read the root, check for size
-        if self.Level_Sizes[0] < 584:
-            print( "Level Size Error PGF Root")
-            print( "Should be >= 584 but is "+str(self.Level_Sizes[0]))
-            quit()
-        #returns new position in file, data grouped according to the documentation and the number of children
-
-        return start_pos+self.Level_Sizes[0]+4, struct.unpack('ii32sii10d320s32iii', data[start_pos:start_pos+584]), struct.unpack('i', data[start_pos+self.Level_Sizes[0]:start_pos+self.Level_Sizes[0]+4])[0]
-        
-        
-    def read_stimulationrecord(self, data, start_pos):
-        # Now continue to the group record, check for size
-        if self.Level_Sizes[1] < 248:
-            print( "Level Size Error Group")
-            print( "Should be >= 248 but is "+str(self.Level_Sizes[1]))
-            quit()
-           
-        #returns new position in file, data grouped according to the documentation and the number of children
-        return start_pos+self.Level_Sizes[1]+4, struct.unpack('i32s32s32sidddddiiiiic????c?c????32s32s????i', data[start_pos:start_pos+248]), struct.unpack('i', data[start_pos+self.Level_Sizes[1]:start_pos+self.Level_Sizes[1]+4])[0]
-        
-    
-    def read_channelrecord(self, data, start_pos):
-        # Now go on with the series record, check for size
-        if self.Level_Sizes[2] < 400:
-            print( "Level Size Error Series")
-            print( "Should be >= 400 but is "+str(self.Level_Sizes[2]))
-            quit()
-
-        #returns new position in file, data grouped according to the documentation and the number of children
-        return start_pos+self.Level_Sizes[2]+4, struct.unpack('iii8shc?cc??hccii8sdddc???hhih?ciiddddddddiiiiiidccccccccddc?c13cddiid124siii', data[start_pos:start_pos+400]), struct.unpack('i', data[start_pos+self.Level_Sizes[2]:start_pos+self.Level_Sizes[2]+4])[0]
-        
-        
-    def read_stimsegmentrecord(self, data, start_pos):
-        # Now go on with the series record, check for size
-        if self.Level_Sizes[3] < 80:
-            print( "Level Size Error Sweep")
-            print( "Should be >= 80 but is "+str(self.Level_Sizes[3]))
-            quit()
-         
-        #returns new position in file, data grouped according to the documentation and the number of children
-        return start_pos+self.Level_Sizes[3]+4, struct.unpack('=ibbbbdidddiddiid', data[start_pos:start_pos+80])  , struct.unpack('i', data[start_pos+self.Level_Sizes[3]:start_pos+self.Level_Sizes[3]+4])[0]
-            
-        
-             

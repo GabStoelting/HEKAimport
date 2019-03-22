@@ -85,7 +85,7 @@ class HEKAfile(object):
                 if ZeroOffset:
                     trace_data = trace_data - (trace.ZeroData*(trace.DataScaler*10**12))
                 time = np.linspace(0, trace.DataPoints*trace.XInterval, num=trace.DataPoints, endpoint=False)
-                trace_df = pd.DataFrame(trace_data, index=time, columns=[trace.Label.decode().split('\x00')[0]])            
+                trace_df = pd.DataFrame(trace_data, index=time, columns=[trace.Label])            
                 Sweeps = pd.concat([Sweeps, trace_df], axis=1) # Sweeps beinhaltet am Ende alle Datenpunkte in einem Pandas DataFrame
                     
         return Sweeps 
@@ -103,7 +103,6 @@ class HEKAfile(object):
         stim_ID = stim_ID+series_index
        
         stimrec = self.pgffile.StimulationRecords[stim_ID]
-
         try:
             for j, time_point in enumerate(time):
                 t = 0
