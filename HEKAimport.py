@@ -101,8 +101,9 @@ class HEKAfile(object):
         for i in range(0, group_index):
             stim_ID=stim_ID+self.pulfile.Groups[i].Children
         stim_ID = stim_ID+series_index
-       
+
         stimrec = self.pgffile.StimulationRecords[stim_ID]
+        time = np.full((self.pulfile.Groups[group_index].Series[series_index].Children, 1), time)
         try:
             for j, time_point in enumerate(time):
                 t = 0
@@ -118,6 +119,7 @@ class HEKAfile(object):
         except TypeError:
             t = 0
             for segment in stimrec.ChannelRecords[0].StimSegmentRecords:
+                print(segment.Voltage)
                 if time < t+segment.Duration and time > t:
                     Voltages.append(segment.Voltage)
                 t = t +segment.Duration

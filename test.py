@@ -24,10 +24,13 @@ for series in groupDict["E-28"].Series:
     #    print("|  |--"+sweep.Label)
         #for trace in sweep.Traces:
         #    print("|  |  L "+trace.Label)
+
    
-plt.figure()
+plt.subplot(121)
 plt.plot(hf.get_Sweeps(groupDict["E-28"].Series[0]))
+
+
+plt.subplot(122)
+plt.plot(hf.get_IV(0.08, 3, 0), hf.get_Sweeps(groupDict["E-28"].Series[0]).loc[0.07999:0.08].values[0], "o")
 plt.show()
 
-
-print(hf.get_IV(0.08, 3, 0))
